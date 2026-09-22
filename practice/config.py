@@ -2,7 +2,7 @@
     공통 변수를 지정하는 파일
 """
 
-BASE = "https://kh-lab.rockua.ai.kr/"
+BASE = "https://kh-lab.rockua.ai.kr"
 
 TIMEOUT = 5
 

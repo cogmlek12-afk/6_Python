@@ -2,16 +2,19 @@
     데이터 로드
 """
 import pandas as pd
-
 from config import path, ENCODING
 
 def load_prices():
-
-        return pd.read_csv(path('prices.csv'), encoding=ENCODING, parse_dates=["date"])
-        
+    """
+        prices.csv 파일을 읽어서 DF 반환
+        (날짜열을 날짜 타입으로 변환)
+    """
+    return pd.read_csv(path('prices.csv'), encoding=ENCODING, parse_dates=['date'])
 
 def load_companies():
-        return pd.read_csv(path('companies.csv'), encoding=ENCODING)
+    """ companies.csv 파일을 읽어서 DF 반환 """
+    return pd.read_csv(path('companies.csv'), encoding=ENCODING)
 
 def load_sectors():
-        return pd.read_csv(path('sectors.csv'), encoding=ENCODING)
+    """ sectors.csv 파일을 읽어서 DF 반환 """
+    return pd.read_csv(path('sectors.csv'), encoding=ENCODING)
