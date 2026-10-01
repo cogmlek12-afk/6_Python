@@ -38,19 +38,92 @@ def clean_prices(records, logger):
     """
 
     # 1. DataFrame 변환
+    df = pd.DataFrame(records)
+    logger.info(f"  입력    {len(df):,}행")
+
 
     # 2. 숫자 타입 정제
     #    -콤마 제거: "1,000" -> "1000" -> 1000
     #    -변환 실패 시 NaN 처리
+    for col in NUM_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(
+                df[col].astype(str).str.replace(",","",regex=False),
+                errors="coerce"
+            )
 
     # 3. 날짜 타입 정제
     #    -날짜 형식이 다르더라도 변환될 수 있어야 함
     #    -변환 실패 시 NaN 처리
-    
+    df["date"] = pd.to_datetime(df["date"])
+
+    # 4. 종목코드 정규화
+    df["code"] = df["code"].astype(str).str.upper().str.strip()
+
+    logger.info(f" 타입정제 {len(df):,}행")
+
+    # 5. 중복제거
+
+    before = len(df)
+
+    df = df.drop_duplicates(subset=["code", "date"], keep="first")
+
+    logger.info(f"중복제거 {len(df):,}행  ({len(df) - before:+,})")
+
+
+#이상치 탐지
+#종목별 날짜순으로 정렬
+    df = df.sort_values(["code", "date"]).reset_index(drop=True)
+
+    def is_outlier(s):
+        """
+            s : 한 종목의 종가 Series
+
+            [IQR 방식]
+                Q1(25 분위수)와 Q3(75 분위수)를 구하고,
+                IQR = Q3 - Q1로 정의
+
+                Q1 - 1.5 * IQR 미만이거나, Q3 + 1.5 + IQR 초과면 이상치로 판단함
+        """
+        q1, q3 = s.quantile([0.25, 0.75])
+        iqr = q3 - q1
+
+        return (s < q1 - 1.5 * iqr) | (s > q3 + 1.5 * iqr)
+
+    stat = df.groupby("code")["close"].transform(is_outlier) # 통계적 이상치
+
+    logic = (df['close'] > df['high'] | (df['close'] < df["low"])) # 논리적 이상치
+
+    n_out = int((stat | logic).sum())
+
+    # 이상치로 판단된 종가 데이터를 NaN으로 변경
+    df.loc[stat | logic, "close"] = pd.NA
+    df["close"] = pd.to_numeric(df["close"], errors="coerce") # 명시적 변환
+
+    # 거래량이 음수인경우 NaN으로 변경
+    df.loc[df["volume"] < 0, "volume"] = pd.NA
+    df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+
+    logger.info(f"이상치 탐지/처리 {len(df):,}행 ({n_out:,}건 -> NaN)")
+
+    # 7. 결측보간
+    # interpolate()
+    # ffill()
+    # bfill()
+    for col in OHLC:
+        df[col] = df.groupby("code")[col].transform(
+            lambda s: s.interpolate().ffill().bfill()
+        )
+        logger.info(f" OHLC 정합성 처리 전 (종가 결측: {df['close'].isna().sum():,})")
+        df["close"].clip(lower=df["low"], upper=df["high"])
+
+    # 8.
+
+
 
 def validate(df, logger):
     """
-        정제 작업 완료 후 검증 결과를 확인하는 함수
+         정제 작업 완료 후 검증 결과를 확인하는 함수
         검증 실패 시 파이프라인 멈춤!
 
         [검증 항목]
